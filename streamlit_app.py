@@ -13,7 +13,7 @@ client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 # Generate text response
 response = client.models.generate_content(
-    model="gemini-2.5-flash",
+    model="gemini-3.8-flash",
     contents="Explain how to analyze data in Streamlit."
 )
 
