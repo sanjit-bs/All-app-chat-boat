@@ -2,14 +2,20 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import gspread
 import pandas as pd
-from openai import OpenAI
+# from openai import OpenAI
+from google import genai
 
 st.set_page_config(page_title="Dynamic Sheets Chatbot", layout="wide")
 st.title("📊 Dynamic Multi-Sheet Chatbot")
 
-# 1. Initialize API Clients
-client = OpenAI(api_key=st.secrets["GEMINI_API_KEY"])
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Initialize the Gemini client using st.secrets
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+# Generate text response
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Explain how to analyze data in Streamlit."
+)
 
 # 2. Fetch All Tab Names Dynamically via gspread
 @st.cache_data(ttl=600)
