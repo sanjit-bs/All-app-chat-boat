@@ -8,7 +8,7 @@ st.set_page_config(page_title="Dynamic Sheets Chatbot", layout="wide")
 st.title("📊 Dynamic Multi-Sheet Chatbot")
 
 # 1. Initialize API Clients
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=st.secrets["GEMINI_API_KEY"])
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. Fetch All Tab Names Dynamically via gspread
