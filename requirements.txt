@@ -1,7 +1,6 @@
 streamlit
-pandas
+streamlit-gsheets
 gspread
-google-auth
-openpyxl
-numpy
-streamlit_gsheets
+pandas
+openai
+google-genai
