@@ -1,5 +1,5 @@
 import streamlit as st
-# from streamlit_gsheets import GSheetsConnection
+from streamlit_gsheets import GSheetsConnection
 import gspread
 import pandas as pd
 from openai import OpenAI
