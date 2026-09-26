@@ -18,65 +18,97 @@ def get_gspread_client():
 gc = get_gspread_client()
 spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
-# 3. Fetch All Tab Names Dynamically
+# 3. Fetch All Available Tab Names Dynamically
 @st.cache_data(ttl=600)
 def get_all_sheet_names():
     sh = gc.open_by_url(spreadsheet_url)
     return [sheet.title for sheet in sh.worksheets()]
 
-# 4. Load Data from Every Tab using gspread (Fixes HTTP 400 Bad Request)
+# 4. Safe Row Reader (Handles duplicate dates/headers safely)
 @st.cache_data(ttl=300)
-def load_all_sheet_data(tab_names):
+def load_selected_sheet_data(tab_names):
     sh = gc.open_by_url(spreadsheet_url)
-    all_data = {}
+    data_dict = {}
+    
     for tab in tab_names:
         worksheet = sh.worksheet(tab)
-        records = worksheet.get_all_records()
-        all_data[tab] = pd.DataFrame(records)
-    return all_data
+        # Fetch raw rows to bypass header/duplicate errors
+        rows = worksheet.get_all_values()
+        
+        if rows:
+            headers = rows[0]
+            values = rows[1:]
+            df = pd.DataFrame(values, columns=headers)
+        else:
+            df = pd.DataFrame()
+            
+        data_dict[tab] = df
+        
+    return data_dict
 
-# Fetch tabs & load datasets
-tabs = get_all_sheet_names()
-sheets_dict = load_all_sheet_data(tabs)
+# Step A: Get all sheet names from the Google Spreadsheet
+all_tabs = get_all_sheet_names()
 
-# Sidebar Viewer
+# Sidebar: Allow user to select specific sheets to target
 with st.sidebar:
-    st.header(f"Workbook Tabs ({len(tabs)})")
-    selected_tab = st.selectbox("Inspect sheet:", tabs)
-    st.dataframe(sheets_dict[selected_tab].head(10))
+    st.header("🎯 Target Selection")
+    
+    # User selects which specific sheets the chatbot should work on
+    active_tabs = st.multiselect(
+        "Select sheet(s) for chatbot context:",
+        options=all_tabs,
+        default=[all_tabs[0]] if all_tabs else []
+    )
+    
+    # Optional Data Inspector
+    if active_tabs:
+        inspect_tab = st.selectbox("Inspect sheet content:", active_tabs)
+        sheets_preview = load_selected_sheet_data([inspect_tab])
+        st.dataframe(sheets_preview[inspect_tab].head(10))
 
-# 5. Context Builder for System Prompt
+# Fetch data ONLY for the selected sheets
+if active_tabs:
+    sheets_dict = load_selected_sheet_data(active_tabs)
+else:
+    sheets_dict = {}
+    st.warning("Please select at least one sheet in the sidebar to start chatting.")
+
+# 5. Context Builder (Feeds only selected sheets to the LLM)
 def build_dataset_context(data_dict):
-    context = "You are an assistant with access to a Google Sheet containing the following tabs:\n\n"
+    context = "You are an assistant. You are currently analyzing ONLY the following selected sheet tabs:\n\n"
     for tab_name, df in data_dict.items():
-        context += f"=== TAB: {tab_name} ===\n"
-        # Convert first 50 rows per tab to CSV string to avoid token limit errors
+        context += f"=== TAB NAME: {tab_name} ===\n"
+        # Convert first 50 rows of data to CSV string format
         context += df.head(50).to_csv(index=False) + "\n\n"
     return context
 
-# 6. Initialize Chat History
-if "messages" not in st.session_state:
+# 6. Initialize Chat History & Reset if active tabs change
+if "active_tabs_cache" not in st.session_state or st.session_state.active_tabs_cache != active_tabs:
+    st.session_state.active_tabs_cache = active_tabs
     st.session_state.messages = [
         {"role": "system", "content": build_dataset_context(sheets_dict)}
     ]
 
-# 7. Render Messages
+# 7. Render Chat Messages
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
 # 8. Handle User Chat Input
-if prompt := st.chat_input("Ask anything across any tab..."):
-    st.chat_message("user").markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
+if prompt := st.chat_input("Ask anything about the selected sheet(s)..."):
+    if not active_tabs:
+        st.error("Please select a sheet from the sidebar first!")
+    else:
+        st.chat_message("user").markdown(prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
-    with st.chat_message("assistant"):
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=st.session_state.messages
-        )
-        reply = response.choices[0].message.content
-        st.markdown(reply)
+        with st.chat_message("assistant"):
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=st.session_state.messages
+            )
+            reply = response.choices[0].message.content
+            st.markdown(reply)
 
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.session_state.messages.append({"role": "assistant", "content": reply})
