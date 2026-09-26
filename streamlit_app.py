@@ -2,8 +2,8 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import gspread
 import pandas as pd
-# from openai import OpenAI
-from google import genai
+from openai import OpenAI
+# from google import genai
 
 st.set_page_config(page_title="Dynamic Sheets Chatbot", layout="wide")
 st.title("📊 Dynamic Multi-Sheet Chatbot")
